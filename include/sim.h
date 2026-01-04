@@ -9,8 +9,8 @@ void regular_process(void);
 void hd_process(void);
 
 /* Specific thread functions */
-void* mmu_main_thread(void* arg);
-void* mmu_evicter_thread(void* arg);
-void* mmu_printer_thread(void* arg);
+void *mmu_main_thread(void *arg);
+void *mmu_evicter_thread(void *arg);
+void *mmu_printer_thread(void *arg);
 
 #endif
