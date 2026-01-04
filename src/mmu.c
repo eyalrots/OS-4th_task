@@ -1,50 +1,50 @@
 #include "../include/mmu.h"
 #include <pthread.h>
+#include <stdbool.h>
 #include <string.h>
 
-void find_invalid(int *page_id, page_t *memory)
+int __find_invalid(page_t *memory)
 {
     int i;
 
     for (i = 0; i < N; i++) {
         if (!memory[i].valid) {
-            *page_id = i;
+            return i;
         }
     }
-    *page_id = -1;
+    return -1;
 }
 
 void __memory_operation(pthread_mutex_t *mem_mutex, page_t *memory, int page_id,
-                        bool *new_valid, bool *new_dirty, bool *new_reference,
-                        bool operation)
+                        page_t *new_page, bool operation)
 {
     /*
      *   Write operation emsuring mutex.
      *   operation: READ (false) || WRITE (true).
      */
-    if (!memory) {
+    if (!memory || !new_page) {
         return;
     }
     pthread_mutex_lock(mem_mutex);
     if (operation) {
-        if (new_valid) {
-            memory[page_id].valid = *new_valid;
+        if (new_page->valid) {
+            memory[page_id].valid = new_page->valid;
         }
-        if (new_dirty) {
-            memory[page_id].dirty = *new_dirty;
+        if (new_page->dirty) {
+            memory[page_id].dirty = new_page->dirty;
         }
-        if (new_reference) {
-            memory[page_id].reference = *new_reference;
+        if (new_page->reference) {
+            memory[page_id].reference = new_page->reference;
         }
     } else {
-        if (new_valid) {
-            *new_valid = memory[page_id].valid;
+        if (new_page->valid) {
+            new_page->valid = memory[page_id].valid;
         }
-        if (new_dirty) {
-            *new_dirty = memory[page_id].dirty;
+        if (new_page->dirty) {
+            new_page->dirty = memory[page_id].dirty;
         }
-        if (new_reference) {
-            *new_reference = memory[page_id].reference;
+        if (new_page->reference) {
+            new_page->reference = memory[page_id].reference;
         }
     }
     pthread_mutex_unlock(mem_mutex);
@@ -83,9 +83,7 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
     struct timespec remaining;
     /* mutex opratiom variables */
     int *new_cnt;
-    bool *new_valid;
-    bool *new_dirty;
-    bool *new_reference;
+    page_t new_page;
 
     duration.tv_nsec = MEM_WR_T;
     duration.tv_sec = 0;
@@ -94,7 +92,7 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         /* receive msg request */
         msgrcv(msgid, &msg, sizeof(msg), 1, 0);
 
-        find_invalid(&page_id, memory);
+        page_id = __find_invalid(memory);
         __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
         is_full = *new_cnt == N;
         is_empty = *new_cnt == 0;
@@ -117,10 +115,10 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             // WAIT FOR ACK.
 
             /* make page valid */
-            *new_valid = true;
-            *new_dirty = false;
-            __memory_operation(mem_mutex, memory, page_id, new_valid, new_dirty,
-                               NULL, WRITE);
+            new_page.valid = true;
+            new_page.dirty = false;
+            new_page.reference = NULL;
+            __memory_operation(mem_mutex, memory, page_id, &new_page, WRITE);
 
             __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
             (*new_cnt)++;
@@ -129,21 +127,22 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         /* READ or WRITE operation */
         do {
             random = rand() % N;
-            __memory_operation(mem_mutex, memory, (int)random, new_valid, NULL,
-                               NULL, READ);
-        } while (!new_valid);
-        *new_reference = true;
-        __memory_operation(mem_mutex, memory, (int)random, NULL, NULL,
-                           new_reference, WRITE);
+            __memory_operation(mem_mutex, memory, (int)random, &new_page, READ);
+        } while (!new_page.valid);
+        new_page.valid = NULL;
+        new_page.dirty = NULL;
+        new_page.reference = true;
+        __memory_operation(mem_mutex, memory, (int)random, &new_page, WRITE);
         if (!msg.action) {
             // SEND ACK TO PROCESS
             continue;
         }
         /* WRITE */
         nanosleep(&duration, &remaining);
-        *new_dirty = true;
-        __memory_operation(mem_mutex, memory, (int)random, NULL, new_dirty,
-                           NULL, WRITE);
+        new_page.valid = NULL;
+        new_page.dirty = true;
+        new_page.reference = NULL;
+        __memory_operation(mem_mutex, memory, (int)random, &new_page, WRITE);
         // SEND ACK TO PROCESS
     }
 }
@@ -155,9 +154,7 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
     int circular_idx;
     /* mutex opratiom variables */
     int *new_cnt;
-    bool *new_valid;
-    bool *new_dirty;
-    bool *new_reference;
+    page_t new_page;
 
     circular_idx = 0;
 
@@ -169,31 +166,36 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
 
         while (*new_cnt > USED_SLOTS_TH) {
-            __memory_operation(mem_mutex, memory, circular_idx, NULL, NULL,
-                               new_reference, READ);
-            if ((*new_reference)) {
-                *new_reference = false;
-                __memory_operation(mem_mutex, memory, circular_idx, NULL, NULL,
-                                   new_reference, WRITE);
+            __memory_operation(mem_mutex, memory, circular_idx, &new_page,
+                               READ);
+            if (new_page.reference) {
+                new_page.valid = NULL;
+                new_page.dirty = NULL;
+                new_page.reference = false;
+                __memory_operation(mem_mutex, memory, circular_idx, &new_page,
+                                   WRITE);
                 circular_idx = (circular_idx + 1) % N;
                 continue;
             }
-            __memory_operation(mem_mutex, memory, circular_idx, NULL, new_dirty,
-                               NULL, READ);
-            if (!(*new_dirty)) {
-                *new_dirty = false;
-                __memory_operation(mem_mutex, memory, circular_idx, NULL,
-                                   new_dirty, NULL, WRITE);
+            __memory_operation(mem_mutex, memory, circular_idx, &new_page,
+                               READ);
+            if (!new_page.dirty) {
+                new_page.valid = false;
+                new_page.dirty = NULL;
+                new_page.reference = NULL;
+                __memory_operation(mem_mutex, memory, circular_idx, &new_page,
+                                   WRITE);
                 circular_idx = (circular_idx + 1) % N;
                 continue;
             }
             // REQUEST HD.
             // WAIT FOR ACK.
 
-            *new_valid = false;
-            *new_dirty = false;
-            __memory_operation(mem_mutex, memory, circular_idx, new_valid,
-                               new_dirty, NULL, WRITE);
+            new_page.valid = false;
+            new_page.dirty = false;
+            new_page.reference = NULL;
+            __memory_operation(mem_mutex, memory, circular_idx, &new_page,
+                               WRITE);
             __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
             (*new_cnt)--;
             __counter_operation(cnt_mutex, num_in_mem, new_cnt, WRITE);
