@@ -8,4 +8,7 @@
 #define MEM_WR_T        500
 #define USED_SLOTS_TH   2
 
+#define INTER_MEM_ACCS_T    0
+#define WR_RATE             0
+
 #endif

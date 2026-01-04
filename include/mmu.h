@@ -10,6 +10,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <time.h>
+#include <errno.h>
 #include "../include/config.h"
 
 typedef struct page {

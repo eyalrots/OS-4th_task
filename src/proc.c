@@ -24,7 +24,7 @@ void run_process(int msgid , int process_id){
         //step 2 : picking rsndom number between 0 to 1 
         random_number = (double)rand()/ (double)RAND_MAX; // RAND_MAX is the largest number that rand() can give
 
-        if (random_number < WE_RATE){
+        if (random_number < WR_RATE){
             is_it_a_write = 1; // represnt write
         }
         else { 
@@ -32,11 +32,11 @@ void run_process(int msgid , int process_id){
         }
 
         // step 3 : sending the message to MMU
-        my_message.my_type = 1; // type of message
+        my_message.msg_type = 1; // type of message
         my_message.sender_id = process_id ; // who send the message
-        my_message.is_write = is_it_a_write; // write or read
+        my_message.action = is_it_a_write; // write or read
 
-        int send_result = msgsnd(msgid,&my_message,sizeof(my_message - sizeof(long)),0); 
+        int send_result = msgsnd(msgid, &my_message, sizeof(my_message), 0); 
 
         if (send_result == -1){
             perror("ERROR:could not send message to NNU");
@@ -45,11 +45,11 @@ void run_process(int msgid , int process_id){
 
         // step 4 : wait for acknowlegment from the MMU
         int receive_type = process_id + 10; 
-        int recive_result = msgrcv(my_message,sizeof(my_message - sizeof(long)), receive_type, 0);
+        int recive_result = msgrcv(msgid, &my_message, sizeof(my_message), receive_type, 0);
 
         if (recive_result == -1) { 
             perror("ERROR: could not recive acknowlegment from the MMU"); 
-            exit(!);
+            exit(1);
         }
     }
 }
