@@ -95,7 +95,7 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         msgrcv(msgid, &msg, sizeof(msg), 1, 0);
 
         find_invalid(&page_id, memory);
-        __counter_operation(cnt_mutex, num_in_mem, new_cnt, false);
+        __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
         is_full = *new_cnt == N;
         is_empty = *new_cnt == 0;
 
@@ -110,7 +110,7 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                 pthread_mutex_unlock(evctr_mutex);
                 // WAIT FOR SIGNAL.
                 do {
-                    __counter_operation(cnt_mutex, num_in_mem, new_cnt, false);
+                    __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
                 } while (*new_cnt == N);
             }
             // REQUEST HD.
@@ -120,21 +120,21 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             *new_valid = true;
             *new_dirty = false;
             __memory_operation(mem_mutex, memory, page_id, new_valid, new_dirty,
-                               NULL, true);
+                               NULL, WRITE);
 
-            __counter_operation(cnt_mutex, num_in_mem, new_cnt, false);
+            __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
             (*new_cnt)++;
-            __counter_operation(cnt_mutex, num_in_mem, new_cnt, true);
+            __counter_operation(cnt_mutex, num_in_mem, new_cnt, WRITE);
         }
         /* READ or WRITE operation */
         do {
             random = rand() % N;
             __memory_operation(mem_mutex, memory, (int)random, new_valid, NULL,
-                               NULL, false);
+                               NULL, READ);
         } while (!new_valid);
         *new_reference = true;
         __memory_operation(mem_mutex, memory, (int)random, NULL, NULL,
-                           new_reference, true);
+                           new_reference, WRITE);
         if (!msg.action) {
             // SEND ACK TO PROCESS
             continue;
@@ -143,7 +143,7 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         nanosleep(&duration, &remaining);
         *new_dirty = true;
         __memory_operation(mem_mutex, memory, (int)random, NULL, new_dirty,
-                           NULL, true);
+                           NULL, WRITE);
         // SEND ACK TO PROCESS
     }
 }
@@ -166,24 +166,24 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         pthread_cond_wait(mmu_cond, evctr_mutex);
         pthread_mutex_unlock(evctr_mutex);
 
-        __counter_operation(cnt_mutex, num_in_mem, new_cnt, false);
+        __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
 
         while (*new_cnt > USED_SLOTS_TH) {
             __memory_operation(mem_mutex, memory, circular_idx, NULL, NULL,
-                               new_reference, false);
+                               new_reference, READ);
             if ((*new_reference)) {
                 *new_reference = false;
                 __memory_operation(mem_mutex, memory, circular_idx, NULL, NULL,
-                                   new_reference, true);
+                                   new_reference, WRITE);
                 circular_idx = (circular_idx + 1) % N;
                 continue;
             }
             __memory_operation(mem_mutex, memory, circular_idx, NULL, new_dirty,
-                               NULL, false);
+                               NULL, READ);
             if (!(*new_dirty)) {
                 *new_dirty = false;
                 __memory_operation(mem_mutex, memory, circular_idx, NULL,
-                                   new_dirty, NULL, true);
+                                   new_dirty, NULL, WRITE);
                 circular_idx = (circular_idx + 1) % N;
                 continue;
             }
@@ -193,10 +193,10 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             *new_valid = false;
             *new_dirty = false;
             __memory_operation(mem_mutex, memory, circular_idx, new_valid,
-                               new_dirty, NULL, true);
-            __counter_operation(cnt_mutex, num_in_mem, new_cnt, false);
+                               new_dirty, NULL, WRITE);
+            __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
             (*new_cnt)--;
-            __counter_operation(cnt_mutex, num_in_mem, new_cnt, true);
+            __counter_operation(cnt_mutex, num_in_mem, new_cnt, WRITE);
         }
     }
 }

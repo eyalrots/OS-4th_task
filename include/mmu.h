@@ -13,6 +13,9 @@
 #include <errno.h>
 #include "../include/config.h"
 
+#define READ false
+#define WRITE true
+
 typedef struct page {
     bool valid;
     bool dirty;
@@ -26,12 +29,12 @@ typedef struct msg_buffer {
 } message_t;
 
 void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
-	       pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
-	       int *num_in_mem, pthread_cond_t *mmu_cond);
+               pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
+               int *num_in_mem, pthread_cond_t *mmu_cond);
 
 void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
-		  pthread_mutex_t *evctr_mutex, page_t *memory, int msgig,
-		  int *num_in_mem, pthread_cond_t *mmu_cond);
+                  pthread_mutex_t *evctr_mutex, page_t *memory, int msgig,
+                  int *num_in_mem, pthread_cond_t *mmu_cond);
 
 void printer_loop(pthread_mutex_t *mem_mutex, page_t *memory);
 
