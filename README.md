@@ -50,7 +50,7 @@ This help the `Evicter` decide if the `page` deserves a second chance.
 * Receives Requests from `Main Thread`
 * Woken up only when memory is full - to make room.
 * Eviction Algorithms:
-    * Uses a circular index to choose evicted thread.
+    * Uses a circular index to choose evicted `page`.
     * For each `page` check `Reference` bit:
         * 1 -> `page` gets a second chance, `Reference` bit gets 0 and not being evicted - move to another `page`.
         * 0 -> `page` is being evicted.
