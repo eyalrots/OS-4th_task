@@ -22,7 +22,7 @@ typedef struct page {
     bool reference;
 } page_t;
 
-typedef struct msg_buffer {
+typedef struct __attribute__((packed)) msg_buffer {
     long msg_type; /* Request (1) || Ack (2) */
     int sender_id;
     int action; /* READ (0) || WRITE (1) */

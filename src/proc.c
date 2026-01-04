@@ -10,7 +10,6 @@ void run_process(int msgid, int process_id)
 
     // define varribls for probability
     double random_number;
-    bool is_write;
 
     // define time cariabl for waiting
     struct timespec wait_time; // buld struct in time.h libarary
@@ -25,12 +24,10 @@ void run_process(int msgid, int process_id)
         // step 2 : picking rsndom number between 0 to 1
         random_number = (double)rand() / RAND_MAX;
 
-        is_write = random_number < WR_RATE;
-
         // step 3 : sending the message to MMU
         my_message.msg_type = 1; // type of message
         my_message.sender_id = process_id; // who send the message
-        my_message.action = is_write; // write or read
+        my_message.action = random_number < WR_RATE; // write or read
 
         send_result = msgsnd(msgid, &my_message, sizeof(my_message), 0);
 

@@ -120,9 +120,12 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             new_page.reference = NULL;
             __memory_operation(mem_mutex, memory, page_id, &new_page, WRITE);
 
-            __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
-            (*new_cnt)++;
-            __counter_operation(cnt_mutex, num_in_mem, new_cnt, WRITE);
+            // __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
+            // (*new_cnt)++;
+            // __counter_operation(cnt_mutex, num_in_mem, new_cnt, WRITE);
+            pthread_mutex_lock(cnt_mutex);
+            (*num_in_mem)++;
+            pthread_mutex_unlock(cnt_mutex);
         }
         /* READ or WRITE operation */
         do {
@@ -196,9 +199,12 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             new_page.reference = NULL;
             __memory_operation(mem_mutex, memory, circular_idx, &new_page,
                                WRITE);
-            __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
-            (*new_cnt)--;
-            __counter_operation(cnt_mutex, num_in_mem, new_cnt, WRITE);
+            // __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
+            // (*new_cnt)--;
+            // __counter_operation(cnt_mutex, num_in_mem, new_cnt, WRITE);
+            pthread_mutex_lock(cnt_mutex);
+            (*num_in_mem)--;
+            pthread_mutex_unlock(cnt_mutex);
         }
     }
 }
