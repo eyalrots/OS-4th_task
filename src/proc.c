@@ -29,7 +29,7 @@ void run_process(int msgid, int process_id)
         my_message.sender_id = process_id; // who send the message
         my_message.action = random_number < WR_RATE; // write or read
 
-        send_result = msgsnd(msgid, &my_message, sizeof(my_message), 0);
+        send_result = msgsnd(msgid, &my_message, (sizeof(my_message) - sizeof(long)), 0);
 
         if (send_result == -1) {
             perror("ERROR:could not send message to NNU");
@@ -39,7 +39,7 @@ void run_process(int msgid, int process_id)
         // step 4 : wait for acknowlegment from the MMU
         receive_type = process_id + 10;
         recive_result =
-            msgrcv(msgid, &my_message, sizeof(my_message), receive_type, 0);
+            msgrcv(msgid, &my_message, (sizeof(my_message) - sizeof(long)), receive_type, 0);
 
         if (recive_result == -1) {
             perror("ERROR: could not recive acknowlegment from the MMU");
