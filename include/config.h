@@ -11,4 +11,6 @@
 #define INTER_MEM_ACCS_T 0
 #define WR_RATE 0
 
+#define TIME_BETWEEN_SNAPSHOTS 500
+
 #endif

@@ -1,4 +1,5 @@
 #include "../include/mmu.h"
+#include <pthread.h>
 
 int __find_invalid(page_t *memory)
 {
@@ -192,4 +193,36 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             pthread_mutex_unlock(cnt_mutex);
         }
     }
+}
+
+void printer_loop(pthread_mutex_t *mem_mutex, page_t *memory)
+{
+    int i = 0;
+    page_t local_copy_of_memory[N];
+    struct timespec duration = {.tv_nsec = TIME_BETWEEN_SNAPSHOTS, .tv_sec = 0};
+    struct timespec remaining = {.tv_nsec = 0, .tv_sec = 0};
+
+    while (1) {
+        nanosleep(&duration, &remaining);
+
+		pthread_mutex_lock(mem_mutex);
+        for (i = 0; i < N; i++) {
+            local_copy_of_memory[i] = memory[i];
+        }
+        pthread_mutex_unlock(mem_mutex);
+
+        for (i = 0; i < N; i++) {
+            printf("%d|", i);
+            if (local_copy_of_memory[i].valid) {
+                if (local_copy_of_memory[i].dirty) {
+                    printf("1\n");
+                } else {
+                    printf("0\n");
+				}
+            } else {
+                printf("-\n");
+			}
+        }
+        printf("\n\n");
+	}
 }
