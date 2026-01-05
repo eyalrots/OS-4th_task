@@ -12,15 +12,7 @@
 #include <time.h>
 #include <errno.h>
 #include "../include/config.h"
-
-#define READ false
-#define WRITE true
-
-typedef struct page {
-    bool valid;
-    bool dirty;
-    bool reference;
-} page_t;
+#include "../include/page.h"
 
 typedef struct __attribute__((packed)) msg_buffer {
     long msg_type; /* Request (1) || Ack (2) */

@@ -15,39 +15,18 @@ int __find_invalid(page_t *memory)
     return -1;
 }
 
-void __memory_operation(pthread_mutex_t *mem_mutex, page_t *memory, int page_id,
+void __memory_operation(pthread_mutex_t *mem_mutex, page_t *existing_page,
                         page_t *new_page, bool operation)
 {
     /*
      *   Write operation emsuring mutex.
      *   operation: READ (false) || WRITE (true).
      */
-    if (!memory || !new_page) {
-        return;
-    }
-    pthread_mutex_lock(mem_mutex);
     if (operation) {
-        if (new_page->valid) {
-            memory[page_id].valid = new_page->valid;
-        }
-        if (new_page->dirty) {
-            memory[page_id].dirty = new_page->dirty;
-        }
-        if (new_page->reference) {
-            memory[page_id].reference = new_page->reference;
-        }
+        page_write(existing_page, new_page, mem_mutex);
     } else {
-        if (new_page->valid) {
-            new_page->valid = memory[page_id].valid;
-        }
-        if (new_page->dirty) {
-            new_page->dirty = memory[page_id].dirty;
-        }
-        if (new_page->reference) {
-            new_page->reference = memory[page_id].reference;
-        }
-    }
-    pthread_mutex_unlock(mem_mutex);
+        page_read(existing_page, new_page, mem_mutex);
+	}
 }
 
 void __counter_operation(pthread_mutex_t *cnt_mutex, int *num_in_mem,
@@ -57,7 +36,7 @@ void __counter_operation(pthread_mutex_t *cnt_mutex, int *num_in_mem,
      *   Write operation emsuring mutex.
      *   operation: READ (false) || WRITE (true).
      */
-    if (!num_in_mem || !new_num) {
+    if (!num_in_mem || !new_num || !cnt_mutex) {
         return;
     }
     pthread_mutex_lock(cnt_mutex);
@@ -118,11 +97,8 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             new_page.valid = true;
             new_page.dirty = false;
             new_page.reference = NULL;
-            __memory_operation(mem_mutex, memory, page_id, &new_page, WRITE);
+            __memory_operation(mem_mutex, &memory[page_id], &new_page, WRITE);
 
-            // __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
-            // (*new_cnt)++;
-            // __counter_operation(cnt_mutex, num_in_mem, new_cnt, WRITE);
             pthread_mutex_lock(cnt_mutex);
             (*num_in_mem)++;
             pthread_mutex_unlock(cnt_mutex);
@@ -130,12 +106,12 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         /* READ or WRITE operation */
         do {
             random = rand() % N;
-            __memory_operation(mem_mutex, memory, (int)random, &new_page, READ);
+            __memory_operation(mem_mutex, &memory[(int)random], &new_page, READ);
         } while (!new_page.valid);
         new_page.valid = NULL;
         new_page.dirty = NULL;
         new_page.reference = true;
-        __memory_operation(mem_mutex, memory, (int)random, &new_page, WRITE);
+        __memory_operation(mem_mutex, &memory[(int)random], &new_page, WRITE);
         if (!msg.action) {
             // SEND ACK TO PROCESS
             continue;
@@ -145,7 +121,7 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         new_page.valid = NULL;
         new_page.dirty = true;
         new_page.reference = NULL;
-        __memory_operation(mem_mutex, memory, (int)random, &new_page, WRITE);
+        __memory_operation(mem_mutex, &memory[(int)random], &new_page, WRITE);
         // SEND ACK TO PROCESS
     }
 }
@@ -169,25 +145,11 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
 
         while (*new_cnt > USED_SLOTS_TH) {
-            __memory_operation(mem_mutex, memory, circular_idx, &new_page,
-                               READ);
-            if (new_page.reference) {
-                new_page.valid = NULL;
-                new_page.dirty = NULL;
-                new_page.reference = false;
-                __memory_operation(mem_mutex, memory, circular_idx, &new_page,
-                                   WRITE);
+            if (second_chance(&memory[circular_idx], mem_mutex)) {
                 circular_idx = (circular_idx + 1) % N;
                 continue;
             }
-            __memory_operation(mem_mutex, memory, circular_idx, &new_page,
-                               READ);
-            if (!new_page.dirty) {
-                new_page.valid = false;
-                new_page.dirty = NULL;
-                new_page.reference = NULL;
-                __memory_operation(mem_mutex, memory, circular_idx, &new_page,
-                                   WRITE);
+            if (evict_clean(&memory[circular_idx], mem_mutex)) {
                 circular_idx = (circular_idx + 1) % N;
                 continue;
             }
@@ -197,11 +159,8 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             new_page.valid = false;
             new_page.dirty = false;
             new_page.reference = NULL;
-            __memory_operation(mem_mutex, memory, circular_idx, &new_page,
+            __memory_operation(mem_mutex, &memory[circular_idx], &new_page,
                                WRITE);
-            // __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
-            // (*new_cnt)--;
-            // __counter_operation(cnt_mutex, num_in_mem, new_cnt, WRITE);
             pthread_mutex_lock(cnt_mutex);
             (*num_in_mem)--;
             pthread_mutex_unlock(cnt_mutex);
