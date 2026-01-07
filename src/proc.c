@@ -19,7 +19,7 @@ void run_process(int msgid, int process_id)
     wait_time.tv_sec = 0;
     wait_time.tv_nsec = INTER_MEM_ACCS_T;
 
-    while (1) {
+    while (1) { 
         // step 1 : waiting
         nanosleep(&wait_time, NULL);
 
@@ -30,7 +30,6 @@ void run_process(int msgid, int process_id)
         my_message.msg_type = MMU_REQUEST; // type of message
         my_message.sender_id = process_id; // who send the message
         my_message.action = random_number < WR_RATE; // write or read
-
         send_result =
             msgsnd(msgid, &my_message, (sizeof(my_message) - sizeof(long)), 0);
 

@@ -23,12 +23,10 @@ void sim_hard_disk(int msgid)
         /* receive msg request */
         msg_res = msgrcv(msgid, &req, (sizeof(req) - sizeof(long)),
                             HD_REQUEST, 0);
-        if (msg_res == -1 || msg_res < (sizeof(req) - sizeof(long))) {
-            printf("Error: size = %d.\n", msg_res);
+        if (msg_res == -1) {
             perror(
                 "Error: Message receive failed in 'main thread' on process request.\n");
         }
-        printf("Received request from %d with type %ld.\n", req.sender_id, req.msg_type);
 
         nanosleep(&duration, &remaining);
 
@@ -37,12 +35,10 @@ void sim_hard_disk(int msgid)
         ack.msg_type = (long)(HD_ACK + req.action);
         
         msg_res = msgsnd(msgid, &ack, (sizeof(ack) - sizeof(long)), 0);
-        if (msg_res == -1 || msg_res < (sizeof(ack) - sizeof(long))) {
-            printf("Error: size = %d.\n", msg_res);
+        if (msg_res == -1) {
             perror(
                 "Error: Message sending failed in 'main thread' on request HD.\n");
         }
-        printf("Sending ack to %d with type %ld.\n", req.sender_id, ack.msg_type);
     }
 }
 

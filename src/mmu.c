@@ -64,20 +64,16 @@ static void mmu_hd_handler(int msgid, action_t action)
 
     // REQUEST HD.
     msg_result = msgsnd(msgid, &hd_req, (sizeof(hd_req) - sizeof(long)), 0);
-    if (msg_result == -1 || msg_result < (sizeof(hd_req) - sizeof(long))) {
-        printf("Error: size = %d.\n", msg_result);
+    if (msg_result == -1) {
         perror(
             "Error: Message sending failed in 'main thread' on request HD.\n");
 		}
-	printf("Sending message to HD from %d with type %ld.\n", getpid(), (long)hd_req.msg_type);
     // WAIT FOR ACK.
     ack_type = action + HD_ACK;
     msg_result = msgrcv(msgid, &ack, (sizeof(ack) - sizeof(long)), (long)ack_type, 0);
-    if (msg_result == -1 || msg_result < (sizeof(ack) - sizeof(long))) {
-        printf("Error: size = %d.\n", msg_result);
+    if (msg_result == -1) {
         perror("Error: Message receive failed in 'main thread' on HD ack.\n");
     }
-    printf("Received ack from HD in %d with type %ld.\n", getpid(), (long)ack_type);
 }
 
 void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
@@ -106,8 +102,7 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         /* receive msg request */
         msg_result = msgrcv(msgid, &msg, (sizeof(msg) - sizeof(long)),
                             (long)MMU_REQUEST, 0);
-        if (msg_result == -1 || msg_result < (sizeof(msg) - sizeof(long))) {
-            printf("Error: size = %d.\n", msg_result);
+        if (msg_result == -1) {
             perror(
                 "Error: Message receive failed in 'main thread' on process request.\n");
         }
@@ -121,14 +116,16 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         if (!is_hit) {
             if (is_full) {
                 // SIGNAL EVICTER.
+                printf("Main trying to call evicter...\n");
                 pthread_mutex_lock(evctr_mutex);
+                printf("Main signaled cond for evicter.\n");
                 pthread_cond_signal(mmu_cond);
                 pthread_mutex_unlock(evctr_mutex);
                 // WAIT FOR SIGNAL.
                 do {
                     mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt,
                                           (bool)READ);
-                } while (new_cnt == N);
+                } while (new_cnt >= N);
             }
             // REQUEST HD.
             mmu_hd_handler(msgid, READ);
@@ -172,8 +169,7 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         ack.msg_type = msg.sender_id + (long)MMU_ACK;
         ack.sender_id = getpid();
         msg_result = msgsnd(msgid, &ack, (sizeof(ack) - sizeof(long)), 0);
-        if (msg_result == -1 || msg_result < (sizeof(ack) - sizeof(long))) {
-            printf("Error: size = %d.\n", msg_result);
+        if (msg_result == -1) {
             perror(
                 "Error: Message sending failed in 'main thread' on process ack.\n");
         }
@@ -193,9 +189,11 @@ void mmu_evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         pthread_mutex_lock(evctr_mutex);
         pthread_cond_wait(mmu_cond, evctr_mutex);
         pthread_mutex_unlock(evctr_mutex);
-        mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt, (bool)READ);
-
+        printf("Starting to evict...\n");
+		
         while (new_cnt > USED_SLOTS_TH) {
+			mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt, (bool)READ);
+            printf("current number in memory: %d, trying to evict...\n", new_cnt);
             if (page_second_chance(&memory[circular_idx], mem_mutex)) {
                 circular_idx = (circular_idx + 1) % N;
                 continue;
