@@ -24,6 +24,7 @@ void sim_hard_disk(int msgid)
         msg_res = msgrcv(msgid, &req, (sizeof(req) - sizeof(long)),
                             HD_REQUEST, 0);
         if (msg_res == -1 || msg_res < (sizeof(req) - sizeof(long))) {
+            printf("Error: size = %d.\n", msg_res);
             perror(
                 "Error: Message receive failed in 'main thread' on process request.\n");
         }
@@ -37,6 +38,7 @@ void sim_hard_disk(int msgid)
         
         msg_res = msgsnd(msgid, &ack, (sizeof(ack) - sizeof(long)), 0);
         if (msg_res == -1 || msg_res < (sizeof(ack) - sizeof(long))) {
+            printf("Error: size = %d.\n", msg_res);
             perror(
                 "Error: Message sending failed in 'main thread' on request HD.\n");
         }

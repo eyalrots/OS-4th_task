@@ -65,14 +65,16 @@ static void mmu_hd_handler(int msgid, action_t action)
     // REQUEST HD.
     msg_result = msgsnd(msgid, &hd_req, (sizeof(hd_req) - sizeof(long)), 0);
     if (msg_result == -1 || msg_result < (sizeof(hd_req) - sizeof(long))) {
-		perror(
-			"Error: Message sending failed in 'main thread' on request HD.\n");
+        printf("Error: size = %d.\n", msg_result);
+        perror(
+            "Error: Message sending failed in 'main thread' on request HD.\n");
 		}
 	printf("Sending message to HD from %d with type %ld.\n", getpid(), (long)hd_req.msg_type);
     // WAIT FOR ACK.
     ack_type = action + HD_ACK;
     msg_result = msgrcv(msgid, &ack, (sizeof(ack) - sizeof(long)), (long)ack_type, 0);
     if (msg_result == -1 || msg_result < (sizeof(ack) - sizeof(long))) {
+        printf("Error: size = %d.\n", msg_result);
         perror("Error: Message receive failed in 'main thread' on HD ack.\n");
     }
     printf("Received ack from HD in %d with type %ld.\n", getpid(), (long)ack_type);
@@ -105,6 +107,7 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         msg_result = msgrcv(msgid, &msg, (sizeof(msg) - sizeof(long)),
                             (long)MMU_REQUEST, 0);
         if (msg_result == -1 || msg_result < (sizeof(msg) - sizeof(long))) {
+            printf("Error: size = %d.\n", msg_result);
             perror(
                 "Error: Message receive failed in 'main thread' on process request.\n");
         }
@@ -170,6 +173,7 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         ack.sender_id = getpid();
         msg_result = msgsnd(msgid, &ack, (sizeof(ack) - sizeof(long)), 0);
         if (msg_result == -1 || msg_result < (sizeof(ack) - sizeof(long))) {
+            printf("Error: size = %d.\n", msg_result);
             perror(
                 "Error: Message sending failed in 'main thread' on process ack.\n");
         }
