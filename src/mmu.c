@@ -1,5 +1,4 @@
 #include "../include/mmu.h"
-#include <pthread.h>
 
 static int mmu_find_invalid(page_t *memory)
 {
@@ -47,16 +46,20 @@ static void mmu_counter_operation(pthread_mutex_t *cnt_mutex, int *num_in_mem,
     pthread_mutex_unlock(cnt_mutex);
 }
 
-static void mmu_hd_handler(int msgid)
+static void mmu_hd_handler(int msgid, action_t action)
 {
-    message_t hd_req = {.msg_type = (long)HD_REQUEST + getpid(),
-                        .action = 0,
-                        .sender_id = getpid()};
+    message_t hd_req;
     message_t ack;
     int msg_result = 0;
+    type_t ack_type = 0;
 
     /* Initialization */
     memset(&ack, 0, sizeof(ack));
+    memset(&hd_req, 0, sizeof(hd_req));
+
+    hd_req.action = action;
+    hd_req.msg_type = action == WRITE ? HD_WRITE : HD_READ;
+    hd_req.sender_id = getpid();
 
     // REQUEST HD.
     msg_result = msgsnd(msgid, &hd_req, (sizeof(hd_req) - sizeof(long)), 0);
@@ -65,8 +68,8 @@ static void mmu_hd_handler(int msgid)
             "Error: Message sending failed in 'main thread' on request HD.\n");
     }
     // WAIT FOR ACK.
-    msg_result =
-        msgrcv(msgid, &ack, (sizeof(ack) - sizeof(long)), hd_req.msg_type, 0);
+    ack_type = action == WRITE ? HD_WRITE_ACK : HD_READ_ACK;
+    msg_result = msgrcv(msgid, &ack, (sizeof(ack) - sizeof(long)), ack_type, 0);
     if (msg_result == -1 || msg_result < (sizeof(ack) - sizeof(long))) {
         perror("Error: Message receive failed in 'main thread' on HD ack.\n");
     }
@@ -124,7 +127,7 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                 } while (*new_cnt == N);
             }
             // REQUEST HD.
-            mmu_hd_handler(msgid);
+            mmu_hd_handler(msgid, READ);
 
             /* make page valid */
             new_page.valid = true;
@@ -199,7 +202,7 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             }
             // REQUEST HD.
             // WAIT FOR ACK.
-            mmu_hd_handler(msgid);
+            mmu_hd_handler(msgid, WRITE);
 
             new_page.valid = false;
             new_page.dirty = false;

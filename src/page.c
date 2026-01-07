@@ -50,6 +50,7 @@ int page_second_chance(page_t *page, pthread_mutex_t *memory_mutex)
 
     return 0;
 }
+
 int page_evict_clean(page_t *page, pthread_mutex_t *memory_mutex)
 {
     page_t *new_data;

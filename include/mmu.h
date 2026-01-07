@@ -15,7 +15,14 @@
 #include "../include/config.h"
 #include "../include/page.h"
 
-typedef enum type { MMU_REQUEST, HD_REQUEST, MMU_ACK, HD_ACK } type_t;
+typedef enum type {
+    MMU_REQUEST,
+    MMU_ACK,
+    HD_READ,
+    HD_WRITE,
+    HD_READ_ACK,
+    HD_WRITE_ACK
+} type_t;
 
 typedef struct __attribute__((packed)) msg_buffer {
     long msg_type;
