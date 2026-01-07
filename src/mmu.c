@@ -1,4 +1,5 @@
 #include "../include/mmu.h"
+#include <unistd.h>
 
 static int mmu_find_invalid(page_t *memory)
 {
@@ -58,26 +59,28 @@ static void mmu_hd_handler(int msgid, action_t action)
     memset(&hd_req, 0, sizeof(hd_req));
 
     hd_req.action = action;
-    hd_req.msg_type = action == WRITE ? HD_WRITE : HD_READ;
+    hd_req.msg_type = HD_REQUEST;
     hd_req.sender_id = getpid();
 
     // REQUEST HD.
     msg_result = msgsnd(msgid, &hd_req, (sizeof(hd_req) - sizeof(long)), 0);
     if (msg_result == -1 || msg_result < (sizeof(hd_req) - sizeof(long))) {
-        perror(
-            "Error: Message sending failed in 'main thread' on request HD.\n");
-    }
+		perror(
+			"Error: Message sending failed in 'main thread' on request HD.\n");
+		}
+	printf("Sending message to HD from %d with type %ld.\n", getpid(), (long)hd_req.msg_type);
     // WAIT FOR ACK.
-    ack_type = action == WRITE ? HD_WRITE_ACK : HD_READ_ACK;
-    msg_result = msgrcv(msgid, &ack, (sizeof(ack) - sizeof(long)), ack_type, 0);
+    ack_type = action + HD_ACK;
+    msg_result = msgrcv(msgid, &ack, (sizeof(ack) - sizeof(long)), (long)ack_type, 0);
     if (msg_result == -1 || msg_result < (sizeof(ack) - sizeof(long))) {
         perror("Error: Message receive failed in 'main thread' on HD ack.\n");
     }
+    printf("Received ack from HD in %d with type %ld.\n", getpid(), (long)ack_type);
 }
 
-void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
-               pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
-               int *num_in_mem, pthread_cond_t *mmu_cond)
+void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
+                   pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
+                   int *num_in_mem, pthread_cond_t *mmu_cond)
 {
     message_t msg;
     message_t ack;
@@ -90,7 +93,7 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
     struct timespec duration = {.tv_nsec = MEM_WR_T, .tv_sec = 0};
     struct timespec remaining = {.tv_nsec = 0, .tv_sec = 0};
     /* mutex opratiom variables */
-    int *new_cnt = NULL;
+    int new_cnt = 0;
     page_t new_page = {.valid = NULL, .dirty = NULL, .reference = NULL};
 
     /* Iitialization */
@@ -105,15 +108,13 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             perror(
                 "Error: Message receive failed in 'main thread' on process request.\n");
         }
-
         page_id = mmu_find_invalid(memory);
-        mmu_counter_operation(cnt_mutex, num_in_mem, new_cnt, (bool)READ);
-        is_full = *new_cnt == N;
-        is_empty = *new_cnt == 0;
+        mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt, (bool)READ);
+        is_full = new_cnt == N;
+        is_empty = new_cnt == 0;
 
         random = (double)rand() / RAND_MAX;
         is_hit = (random < HIT_RATE) && !is_empty;
-
         if (!is_hit) {
             if (is_full) {
                 // SIGNAL EVICTER.
@@ -122,9 +123,9 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                 pthread_mutex_unlock(evctr_mutex);
                 // WAIT FOR SIGNAL.
                 do {
-                    mmu_counter_operation(cnt_mutex, num_in_mem, new_cnt,
+                    mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt,
                                           (bool)READ);
-                } while (*new_cnt == N);
+                } while (new_cnt == N);
             }
             // REQUEST HD.
             mmu_hd_handler(msgid, READ);
@@ -175,23 +176,22 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
     }
 }
 
-void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
-                  pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
-                  int *num_in_mem, pthread_cond_t *mmu_cond)
+void mmu_evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
+                      pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
+                      int *num_in_mem, pthread_cond_t *mmu_cond)
 {
     int circular_idx = 0;
     /* mutex opratiom variables */
-    int *new_cnt = NULL;
+    int new_cnt = 0;
     page_t new_page = {.valid = NULL, .dirty = NULL, .reference = NULL};
 
     while (1) {
         pthread_mutex_lock(evctr_mutex);
         pthread_cond_wait(mmu_cond, evctr_mutex);
         pthread_mutex_unlock(evctr_mutex);
+        mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt, (bool)READ);
 
-        mmu_counter_operation(cnt_mutex, num_in_mem, new_cnt, (bool)READ);
-
-        while (*new_cnt > USED_SLOTS_TH) {
+        while (new_cnt > USED_SLOTS_TH) {
             if (page_second_chance(&memory[circular_idx], mem_mutex)) {
                 circular_idx = (circular_idx + 1) % N;
                 continue;
@@ -216,7 +216,7 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
     }
 }
 
-void printer_loop(pthread_mutex_t *mem_mutex, page_t *memory)
+void mmu_printer_loop(pthread_mutex_t *mem_mutex, page_t *memory)
 {
     int i = 0;
     page_t local_copy_of_memory[N];

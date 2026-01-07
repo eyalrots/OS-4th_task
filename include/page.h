@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 #include <pthread.h>
+#include <string.h>
+#include <stdio.h>
+#include <pthread.h>
+#include <unistd.h>
 
 typedef enum action { READ, WRITE } action_t;
 

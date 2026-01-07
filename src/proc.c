@@ -1,6 +1,6 @@
 #include "../include/proc.h"
 
-void run_process(int msgid, int process_id, int proc_num)
+void run_process(int msgid, int process_id)
 {
     // define the struct of the message
     message_t my_message;
@@ -30,7 +30,7 @@ void run_process(int msgid, int process_id, int proc_num)
         my_message.msg_type = MMU_REQUEST; // type of message
         my_message.sender_id = process_id; // who send the message
         my_message.action = random_number < WR_RATE; // write or read
-        
+
         send_result =
             msgsnd(msgid, &my_message, (sizeof(my_message) - sizeof(long)), 0);
 

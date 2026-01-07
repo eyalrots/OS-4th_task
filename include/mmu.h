@@ -16,12 +16,10 @@
 #include "../include/page.h"
 
 typedef enum type {
-    MMU_REQUEST,
+    MMU_REQUEST = 1,
     MMU_ACK,
-    HD_READ,
-    HD_WRITE,
-    HD_READ_ACK,
-    HD_WRITE_ACK
+    HD_REQUEST,
+    HD_ACK
 } type_t;
 
 typedef struct __attribute__((packed)) msg_buffer {
@@ -30,14 +28,14 @@ typedef struct __attribute__((packed)) msg_buffer {
     int action; /* READ (0) || WRITE (1) */
 } message_t;
 
-void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
+void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
                int *num_in_mem, pthread_cond_t *mmu_cond);
 
-void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
+void mmu_evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                   pthread_mutex_t *evctr_mutex, page_t *memory, int msgig,
                   int *num_in_mem, pthread_cond_t *mmu_cond);
 
-void printer_loop(pthread_mutex_t *mem_mutex, page_t *memory);
+void mmu_printer_loop(pthread_mutex_t *mem_mutex, page_t *memory);
 
 #endif

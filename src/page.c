@@ -32,14 +32,16 @@ void page_read(page_t *existing_page, page_t *new_data,
 
 int page_second_chance(page_t *page, pthread_mutex_t *memory_mutex)
 {
-    page_t *new_data;
+    page_t *new_data = NULL;
 
     if (!page || !memory_mutex) {
         return 0;
     }
 
     page_read(page, new_data, memory_mutex);
-
+    if (!new_data) {
+        return 1;
+    }
     if (new_data->reference) {
         new_data->valid = NULL;
         new_data->dirty = NULL;
@@ -53,14 +55,16 @@ int page_second_chance(page_t *page, pthread_mutex_t *memory_mutex)
 
 int page_evict_clean(page_t *page, pthread_mutex_t *memory_mutex)
 {
-    page_t *new_data;
+    page_t *new_data = NULL;
 
     if (!page || !memory_mutex) {
         return 0;
     }
 
     page_read(page, new_data, memory_mutex);
-
+    if (!new_data) {
+        return 1;
+    }
     if (!new_data->dirty) {
         new_data->valid = false;
         new_data->dirty = NULL;

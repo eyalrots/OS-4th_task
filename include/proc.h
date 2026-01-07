@@ -3,6 +3,6 @@
 
 #include "mmu.h"
 
-void run_process(int msgid, int process_id, int proc_num);
+void run_process(int msgid, int process_id);
 
 #endif
