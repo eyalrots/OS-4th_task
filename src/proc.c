@@ -4,9 +4,11 @@ void run_process(int msgid, int process_id)
 {
     // define the struct of the message
     message_t my_message;
-    int send_result;
-    int receive_type;
-    int recive_result;
+    long receive_type = 0;
+    int send_result = 0;
+    int recive_result = 0;
+
+    memset(&my_message, 0, sizeof(my_message));
 
     // define varribls for probability
     double random_number;
@@ -29,21 +31,21 @@ void run_process(int msgid, int process_id)
         my_message.sender_id = process_id; // who send the message
         my_message.action = random_number < WR_RATE; // write or read
 
-        send_result = msgsnd(msgid, &my_message, (sizeof(my_message) - sizeof(long)), 0);
+        send_result =
+            msgsnd(msgid, &my_message, (sizeof(my_message) - sizeof(long)), 0);
 
         if (send_result == -1) {
             perror("ERROR:could not send message to NNU");
-            exit(1);
         }
 
         // step 4 : wait for acknowlegment from the MMU
-        receive_type = process_id + 10;
+        receive_type = process_id + (long)MMU_ACK;
         recive_result =
-            msgrcv(msgid, &my_message, (sizeof(my_message) - sizeof(long)), receive_type, 0);
+            msgrcv(msgid, &my_message, (sizeof(my_message) - sizeof(long)),
+                   receive_type, 0);
 
         if (recive_result == -1) {
             perror("ERROR: could not recive acknowlegment from the MMU");
-            exit(1);
         }
     }
 }

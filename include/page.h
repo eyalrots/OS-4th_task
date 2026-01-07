@@ -4,8 +4,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 
-#define READ false
-#define WRITE true
+typedef enum action { READ, WRITE } action_t;
 
 typedef struct page {
     bool valid;
@@ -19,8 +18,8 @@ void page_write(page_t *existing_page, page_t *new_data,
 void page_read(page_t *existing_page, page_t *new_data,
                pthread_mutex_t *memory_mutex);
 
-int second_chance(page_t *page, pthread_mutex_t *memory_mutex);
+int page_second_chance(page_t *page, pthread_mutex_t *memory_mutex);
 
-int evict_clean(page_t *page, pthread_mutex_t *memory_mutex);
+int page_evict_clean(page_t *page, pthread_mutex_t *memory_mutex);
 
 #endif

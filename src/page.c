@@ -26,17 +26,17 @@ void page_read(page_t *existing_page, page_t *new_data,
         return;
     }
     pthread_mutex_lock(memory_mutex);
-	*new_data = *existing_page;
+    *new_data = *existing_page;
     pthread_mutex_unlock(memory_mutex);
 }
 
-int second_chance(page_t *page, pthread_mutex_t *memory_mutex)
+int page_second_chance(page_t *page, pthread_mutex_t *memory_mutex)
 {
     page_t *new_data;
-    
+
     if (!page || !memory_mutex) {
         return 0;
-	}
+    }
 
     page_read(page, new_data, memory_mutex);
 
@@ -46,11 +46,11 @@ int second_chance(page_t *page, pthread_mutex_t *memory_mutex)
         new_data->reference = false;
         page_write(page, new_data, memory_mutex);
         return 1;
-	}
+    }
 
     return 0;
 }
-int evict_clean(page_t *page, pthread_mutex_t *memory_mutex)
+int page_evict_clean(page_t *page, pthread_mutex_t *memory_mutex)
 {
     page_t *new_data;
 

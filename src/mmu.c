@@ -1,7 +1,7 @@
 #include "../include/mmu.h"
 #include <pthread.h>
 
-int __find_invalid(page_t *memory)
+static int mmu_find_invalid(page_t *memory)
 {
     int i = 0;
 
@@ -13,8 +13,9 @@ int __find_invalid(page_t *memory)
     return -1;
 }
 
-void __memory_operation(pthread_mutex_t *mem_mutex, page_t *existing_page,
-                        page_t *new_page, bool operation)
+static void mmu_memory_operation(pthread_mutex_t *mem_mutex,
+                                 page_t *existing_page, page_t *new_page,
+                                 bool operation)
 {
     /*
      *   Write operation emsuring mutex.
@@ -27,8 +28,8 @@ void __memory_operation(pthread_mutex_t *mem_mutex, page_t *existing_page,
     }
 }
 
-void __counter_operation(pthread_mutex_t *cnt_mutex, int *num_in_mem,
-                         int *new_num, bool operation)
+static void mmu_counter_operation(pthread_mutex_t *cnt_mutex, int *num_in_mem,
+                                  int *new_num, bool operation)
 {
     /*
      *   Write operation emsuring mutex.
@@ -46,24 +47,28 @@ void __counter_operation(pthread_mutex_t *cnt_mutex, int *num_in_mem,
     pthread_mutex_unlock(cnt_mutex);
 }
 
-void __hd_handler(int msgid)
+static void mmu_hd_handler(int msgid)
 {
-    message_t hd_req = {.msg_type = 1, .action = false, .sender_id = getpid()};
-    message_t ack = {.msg_type = 0, .action = false, .sender_id = 0};
+    message_t hd_req = {.msg_type = (long)HD_REQUEST + getpid(),
+                        .action = 0,
+                        .sender_id = getpid()};
+    message_t ack;
     int msg_result = 0;
+
+    /* Initialization */
+    memset(&ack, 0, sizeof(ack));
 
     // REQUEST HD.
     msg_result = msgsnd(msgid, &hd_req, (sizeof(hd_req) - sizeof(long)), 0);
     if (msg_result == -1 || msg_result < (sizeof(hd_req) - sizeof(long))) {
         perror(
             "Error: Message sending failed in 'main thread' on request HD.\n");
-        exit(1);
     }
     // WAIT FOR ACK.
-    msg_result = msgrcv(msgid, &ack, (sizeof(ack) - sizeof(long)), 2, 0);
+    msg_result =
+        msgrcv(msgid, &ack, (sizeof(ack) - sizeof(long)), hd_req.msg_type, 0);
     if (msg_result == -1 || msg_result < (sizeof(ack) - sizeof(long))) {
         perror("Error: Message receive failed in 'main thread' on HD ack.\n");
-        exit(1);
     }
 }
 
@@ -71,8 +76,8 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
                int *num_in_mem, pthread_cond_t *mmu_cond)
 {
-    message_t msg = {.msg_type = 0, .action = false, .sender_id = 0};
-    message_t ack = {.msg_type = 0, .action = false, .sender_id = 0};
+    message_t msg;
+    message_t ack;
     int msg_result = 0;
     double random = 0;
     bool is_hit = false;
@@ -85,17 +90,21 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
     int *new_cnt = NULL;
     page_t new_page = {.valid = NULL, .dirty = NULL, .reference = NULL};
 
+    /* Iitialization */
+    memset(&msg, 0, sizeof(msg));
+    memset(&ack, 0, sizeof(ack));
+
     while (1) {
         /* receive msg request */
-        msg_result = msgrcv(msgid, &msg, (sizeof(msg) - sizeof(long)), 1, 0);
+        msg_result = msgrcv(msgid, &msg, (sizeof(msg) - sizeof(long)),
+                            (long)MMU_REQUEST, 0);
         if (msg_result == -1 || msg_result < (sizeof(msg) - sizeof(long))) {
             perror(
                 "Error: Message receive failed in 'main thread' on process request.\n");
-            exit(1);
         }
 
-        page_id = __find_invalid(memory);
-        __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
+        page_id = mmu_find_invalid(memory);
+        mmu_counter_operation(cnt_mutex, num_in_mem, new_cnt, (bool)READ);
         is_full = *new_cnt == N;
         is_empty = *new_cnt == 0;
 
@@ -110,17 +119,19 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                 pthread_mutex_unlock(evctr_mutex);
                 // WAIT FOR SIGNAL.
                 do {
-                    __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
+                    mmu_counter_operation(cnt_mutex, num_in_mem, new_cnt,
+                                          (bool)READ);
                 } while (*new_cnt == N);
             }
             // REQUEST HD.
-            __hd_handler(msgid);
+            mmu_hd_handler(msgid);
 
             /* make page valid */
             new_page.valid = true;
             new_page.dirty = false;
             new_page.reference = NULL;
-            __memory_operation(mem_mutex, &memory[page_id], &new_page, WRITE);
+            mmu_memory_operation(mem_mutex, &memory[page_id], &new_page,
+                                 (bool)WRITE);
 
             pthread_mutex_lock(cnt_mutex);
             (*num_in_mem)++;
@@ -129,13 +140,14 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         /* READ or WRITE operation */
         do {
             random = rand() % N;
-            __memory_operation(mem_mutex, &memory[(int)random], &new_page,
-                               READ);
+            mmu_memory_operation(mem_mutex, &memory[(int)random], &new_page,
+                                 (bool)READ);
         } while (!new_page.valid);
         new_page.valid = NULL;
         new_page.dirty = NULL;
         new_page.reference = true;
-        __memory_operation(mem_mutex, &memory[(int)random], &new_page, WRITE);
+        mmu_memory_operation(mem_mutex, &memory[(int)random], &new_page,
+                             (bool)WRITE);
         if (!msg.action) {
             // SEND ACK TO PROCESS
             goto proc_ack;
@@ -146,16 +158,16 @@ void main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         new_page.valid = NULL;
         new_page.dirty = true;
         new_page.reference = NULL;
-        __memory_operation(mem_mutex, &memory[(int)random], &new_page, WRITE);
+        mmu_memory_operation(mem_mutex, &memory[(int)random], &new_page,
+                             (bool)WRITE);
         // SEND ACK TO PROCESS
     proc_ack:
-        ack.msg_type = 2;
+        ack.msg_type = msg.sender_id + (long)MMU_ACK;
         ack.sender_id = getpid();
         msg_result = msgsnd(msgid, &ack, (sizeof(ack) - sizeof(long)), 0);
         if (msg_result == -1 || msg_result < (sizeof(ack) - sizeof(long))) {
             perror(
                 "Error: Message sending failed in 'main thread' on process ack.\n");
-            exit(1);
         }
     }
 }
@@ -174,26 +186,26 @@ void evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         pthread_cond_wait(mmu_cond, evctr_mutex);
         pthread_mutex_unlock(evctr_mutex);
 
-        __counter_operation(cnt_mutex, num_in_mem, new_cnt, READ);
+        mmu_counter_operation(cnt_mutex, num_in_mem, new_cnt, (bool)READ);
 
         while (*new_cnt > USED_SLOTS_TH) {
-            if (second_chance(&memory[circular_idx], mem_mutex)) {
+            if (page_second_chance(&memory[circular_idx], mem_mutex)) {
                 circular_idx = (circular_idx + 1) % N;
                 continue;
             }
-            if (evict_clean(&memory[circular_idx], mem_mutex)) {
+            if (page_evict_clean(&memory[circular_idx], mem_mutex)) {
                 circular_idx = (circular_idx + 1) % N;
                 continue;
             }
             // REQUEST HD.
             // WAIT FOR ACK.
-            __hd_handler(msgid);
+            mmu_hd_handler(msgid);
 
             new_page.valid = false;
             new_page.dirty = false;
             new_page.reference = NULL;
-            __memory_operation(mem_mutex, &memory[circular_idx], &new_page,
-                               WRITE);
+            mmu_memory_operation(mem_mutex, &memory[circular_idx], &new_page,
+                                 (bool)WRITE);
             pthread_mutex_lock(cnt_mutex);
             (*num_in_mem)--;
             pthread_mutex_unlock(cnt_mutex);
