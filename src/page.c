@@ -6,9 +6,13 @@ void page_write(page_t *existing_page, page_t *new_data,
     if (!existing_page || !new_data) {
         return;
     }
-    pthread_mutex_lock(memory_mutex);
+    if (pthread_mutex_lock(memory_mutex)) {
+        perror("Error: Failed to lock memory mutex @wrire.\n");
+    }
     *existing_page = *new_data;
-    pthread_mutex_unlock(memory_mutex);
+    if (pthread_mutex_unlock(memory_mutex)) {
+        perror("Error: Failed to unlock memory mutex @write.\n");
+    }
 }
 
 void page_read(page_t *existing_page, page_t *new_data,
@@ -17,9 +21,13 @@ void page_read(page_t *existing_page, page_t *new_data,
     if (!existing_page || !new_data) {
         return;
     }
-    pthread_mutex_lock(memory_mutex);
+    if (pthread_mutex_lock(memory_mutex)) {
+        perror("Error: Failed to lock memory mutex @read.\n");
+    }
     *new_data = *existing_page;
-    pthread_mutex_unlock(memory_mutex);
+    if (pthread_mutex_unlock(memory_mutex)) {
+        perror("Error: Failed to unlock memory mutex @read.\n");
+    }
 }
 
 int page_second_chance(page_t *page, pthread_mutex_t *memory_mutex)
@@ -57,8 +65,8 @@ int page_evict_clean(page_t *page, pthread_mutex_t *memory_mutex)
 
     if (!new_data.dirty) {
         new_data.valid = false;
-        new_data.dirty = page->dirty;
-        new_data.reference = page->reference;
+        new_data.dirty = false;
+        new_data.reference = false;
         page_write(page, &new_data, memory_mutex);
         return 1;
     }

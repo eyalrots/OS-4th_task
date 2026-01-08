@@ -1,4 +1,5 @@
 #include "../include/sim.h"
+#include <pthread.h>
 
 /* GLOBAL VARIABLES */
 pthread_mutex_t mem_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -21,8 +22,8 @@ void sim_hard_disk(int msgid)
 
     while (1) {
         /* receive msg request */
-        msg_res = msgrcv(msgid, &req, (sizeof(req) - sizeof(long)),
-                            HD_REQUEST, 0);
+        msg_res =
+            msgrcv(msgid, &req, (sizeof(req) - sizeof(long)), HD_REQUEST, 0);
         if (msg_res == -1) {
             perror(
                 "Error: Message receive failed in 'main thread' on process request.\n");
@@ -33,7 +34,7 @@ void sim_hard_disk(int msgid)
         ack.action = req.action;
         ack.sender_id = getpid();
         ack.msg_type = (long)(HD_ACK + req.action);
-        
+
         msg_res = msgsnd(msgid, &ack, (sizeof(ack) - sizeof(long)), 0);
         if (msg_res == -1) {
             perror(
@@ -84,6 +85,7 @@ int main()
     int msgid = 0;
     key_t key = 0;
     int i = 0;
+    int error = 0;
 
     /* Initialization */
     memset(&pids, 0, sizeof(pids));
@@ -98,28 +100,36 @@ int main()
     } else if (pids[0] == 0) {
         /* Child process -> MMU */
         /* Create threads */
-        printf("MMU process with id %d starts...\n", getpid());
-        pthread_create(&mmu_main, NULL, &sim_mmu_main_thread, (void *)(&msgid));
-        pthread_create(&mmu_evicter, NULL, &sim_mmu_evicter_thread,
-                       (void *)(&msgid));
-        pthread_create(&mmu_printer, NULL, sim_mmu_printer_thread, NULL);
-        pthread_join(mmu_main, NULL);
-        pthread_join(mmu_evicter, NULL);
-        pthread_join(mmu_printer, NULL);
+        if (pthread_create(&mmu_main, NULL, &sim_mmu_main_thread,
+                           (void *)(&msgid))) {
+            perror("Error: Failed to create MMU main thread.\n");
+        }
+        if (pthread_create(&mmu_evicter, NULL, &sim_mmu_evicter_thread,
+                           (void *)(&msgid))) {
+            perror("Error: Failed to create MMU evicter thread.\n");
+        }
+        if (pthread_create(&mmu_printer, NULL, sim_mmu_printer_thread, NULL)) {
+            perror("Error: Failed to create MMU printer thread.\n");
+        }
+        if (pthread_join(mmu_main, NULL)) {
+            perror("Error: Failed to joid MMU main thread.\n");
+        }
+        if (pthread_join(mmu_evicter, NULL)) {
+            perror("Error: Failed to join MMU evicter thread.\n");
+        }
+        if (pthread_join(mmu_printer, NULL)) {
+            perror("Error: Failed to join MMU printer thread.\n");
+        }
         goto ok_ret;
     } else {
         pids[1] = sim_my_fork();
     }
 
-    if(pids[1] == -1)
-    {
+    if (pids[1] == -1) {
         return 1;
-    }
-    else if (pids[1] == 0)
-    {
+    } else if (pids[1] == 0) {
         /* Child process -> MMU */
         /* Create Process 1 */
-        printf("Process 1 with id %d starts...\n", getpid());
         run_process(msgid, getpid());
         goto ok_ret;
     } else {
@@ -131,7 +141,6 @@ int main()
     } else if (pids[2] == 0) {
         /* Child process -> MMU */
         /* Create Process 2 */
-        printf("Process 2 with id %d starts...\n", getpid());
         run_process(msgid, getpid());
         goto ok_ret;
     } else {
@@ -143,21 +152,28 @@ int main()
     } else if (pids[3] == 0) {
         /* Child process -> MMU */
         /* Create Hard Disk */
-        printf("HD process with id %d starts...\n", getpid());
         sim_hard_disk(msgid);
         goto ok_ret;
     }
-    
+
     sleep(SIM_TIME);
 
     for (i = 0; i < 4; i++) {
         kill(pids[i], SIGKILL);
     }
 
-    msgctl(msgid, IPC_RMID, NULL);
+    if (msgctl(msgid, IPC_RMID, NULL) == -1) {
+        perror("Error: Failed to destroy message queue.\n");
+    }
+
+    /* Destroy mutexes */
+    pthread_mutex_destroy(&mem_mutex);
+    pthread_mutex_destroy(&cnt_mutex);
+    pthread_mutex_destroy(&cond_mutex);
+    pthread_cond_destroy(&mmu_cond);
 
     printf("Successfully finished sim\n");
-    
+
 ok_ret:
     return 0;
 }

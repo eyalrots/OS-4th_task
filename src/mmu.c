@@ -38,13 +38,17 @@ static void mmu_counter_operation(pthread_mutex_t *cnt_mutex, int *num_in_mem,
     if (!num_in_mem || !new_num || !cnt_mutex) {
         return;
     }
-    pthread_mutex_lock(cnt_mutex);
+    if (pthread_mutex_lock(cnt_mutex)) {
+        perror("Error: Failed to lock counter mutex @read.\n");
+    }
     if (operation) {
         *num_in_mem = *new_num;
     } else {
         *new_num = *num_in_mem;
     }
-    pthread_mutex_unlock(cnt_mutex);
+    if (pthread_mutex_unlock(cnt_mutex)) {
+        perror("Error: Failed to unlock counter mutex @read.\n");
+    }
 }
 
 static void mmu_hd_handler(int msgid, action_t action)
@@ -117,9 +121,15 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         if (!is_hit) {
             if (is_full) {
                 // SIGNAL EVICTER.
-                pthread_mutex_lock(evctr_mutex);
-                pthread_cond_signal(mmu_cond);
-                pthread_mutex_unlock(evctr_mutex);
+                if (pthread_mutex_lock(evctr_mutex)) {
+                    perror("Error: Failed to lock cond mutex @main.\n");
+                }
+                if (pthread_cond_signal(mmu_cond)) {
+                    perror("Error: Failed to signalconditional variable main->evicter.\n");
+                }
+                if (pthread_mutex_unlock(evctr_mutex)) {
+                    perror("Error: Failed to unlock cond mutex @main.\n");
+                }
 
                 // WAIT FOR SIGNAL.
                 do {
@@ -134,27 +144,33 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             /* make page valid */
             new_page.valid = true;
             new_page.dirty = false;
-            new_page.reference = memory[page_id].reference;
+            new_page.reference = false;
             mmu_memory_operation(mem_mutex, &memory[page_id], &new_page,
                                  (bool)WRITE);
 
-            pthread_mutex_lock(cnt_mutex);
+            if (pthread_mutex_lock(cnt_mutex)) {
+                perror("Error: Failed to lock counter mutex @main.\n");
+            }
             (*num_in_mem)++;
-            pthread_mutex_unlock(cnt_mutex);
+            if (pthread_mutex_unlock(cnt_mutex)) {
+                perror("Error: Failed to unlock counter mutex @main.\n");
+            }
         }
         /* READ or WRITE operation */
-        do {
-            random = rand() % N;
-            mmu_memory_operation(mem_mutex, &memory[(int)random], &new_page,
-                                 (bool)READ);
-        } while (!new_page.valid);
         if (is_hit) {
+            do {
+                random = rand() % N;
+                mmu_memory_operation(mem_mutex, &memory[(int)random], &new_page,
+                                     (bool)READ);
+            } while (!new_page.valid);
             new_page.valid = memory[(int)random].valid;
             new_page.dirty = memory[(int)random].dirty;
             new_page.reference = true;
             mmu_memory_operation(mem_mutex, &memory[(int)random], &new_page,
                                  (bool)WRITE);
-        }
+        } else {
+            random = page_id;
+		}
         if (!msg.action) {
             // SEND ACK TO PROCESS
             goto proc_ack;
@@ -207,14 +223,18 @@ void mmu_evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             mmu_hd_handler(msgid, WRITE);
             new_page.valid = false;
             new_page.dirty = false;
-            new_page.reference = memory[circular_idx].reference;
+            new_page.reference = false;
             mmu_memory_operation(mem_mutex, &memory[circular_idx], &new_page,
                                  (bool)WRITE);
         update_counter:
             circular_idx = (circular_idx + 1) % N;
-            pthread_mutex_lock(cnt_mutex);
+            if (pthread_mutex_lock(cnt_mutex)) {
+                perror("Error: Failed to lock counter mutex @evicter.\n");
+            }
             (*num_in_mem)--;
-            pthread_mutex_unlock(cnt_mutex);
+            if (pthread_mutex_unlock(cnt_mutex)) {
+                perror("Error: Failed to unlock counter mutex @evicter.\n");
+            }
             mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt, (bool)READ);
         }
     }
@@ -230,11 +250,15 @@ void mmu_printer_loop(pthread_mutex_t *mem_mutex, page_t *memory)
     while (1) {
         nanosleep(&duration, &remaining);
 
-        pthread_mutex_lock(mem_mutex);
+        if (pthread_mutex_lock(mem_mutex)) {
+            perror("Error: Failed to lock memory mutex @printer.\n");
+		}
         for (i = 0; i < N; i++) {
             local_copy_of_memory[i] = memory[i];
         }
-        pthread_mutex_unlock(mem_mutex);
+        if (pthread_mutex_unlock(mem_mutex)) {
+            perror("Error: Failed to unlock memory mutex @printer.\n");
+        }
 
         for (i = 0; i < N; i++) {
             printf("%d|", i);
