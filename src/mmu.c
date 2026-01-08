@@ -67,10 +67,11 @@ static void mmu_hd_handler(int msgid, action_t action)
     if (msg_result == -1) {
         perror(
             "Error: Message sending failed in 'main thread' on request HD.\n");
-		}
+    }
     // WAIT FOR ACK.
     ack_type = action + HD_ACK;
-    msg_result = msgrcv(msgid, &ack, (sizeof(ack) - sizeof(long)), (long)ack_type, 0);
+    msg_result =
+        msgrcv(msgid, &ack, (sizeof(ack) - sizeof(long)), (long)ack_type, 0);
     if (msg_result == -1) {
         perror("Error: Message receive failed in 'main thread' on HD ack.\n");
     }
@@ -116,13 +117,12 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         if (!is_hit) {
             if (is_full) {
                 // SIGNAL EVICTER.
-                printf("Main trying to call evicter...\n");
                 pthread_mutex_lock(evctr_mutex);
-                printf("Main signaled cond for evicter.\n");
                 pthread_cond_signal(mmu_cond);
                 pthread_mutex_unlock(evctr_mutex);
                 // WAIT FOR SIGNAL.
                 do {
+                    sched_yield();
                     mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt,
                                           (bool)READ);
                 } while (new_cnt >= N);
@@ -189,31 +189,30 @@ void mmu_evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         pthread_mutex_lock(evctr_mutex);
         pthread_cond_wait(mmu_cond, evctr_mutex);
         pthread_mutex_unlock(evctr_mutex);
-        printf("Starting to evict...\n");
-		
+
+        mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt, (bool)READ);
         while (new_cnt > USED_SLOTS_TH) {
-			mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt, (bool)READ);
-            printf("current number in memory: %d, trying to evict...\n", new_cnt);
             if (page_second_chance(&memory[circular_idx], mem_mutex)) {
                 circular_idx = (circular_idx + 1) % N;
                 continue;
             }
             if (page_evict_clean(&memory[circular_idx], mem_mutex)) {
-                circular_idx = (circular_idx + 1) % N;
-                continue;
+                goto update_counter;
             }
             // REQUEST HD.
             // WAIT FOR ACK.
             mmu_hd_handler(msgid, WRITE);
-
             new_page.valid = false;
             new_page.dirty = false;
             new_page.reference = NULL;
             mmu_memory_operation(mem_mutex, &memory[circular_idx], &new_page,
                                  (bool)WRITE);
+        update_counter:
+            circular_idx = (circular_idx + 1) % N;
             pthread_mutex_lock(cnt_mutex);
             (*num_in_mem)--;
             pthread_mutex_unlock(cnt_mutex);
+            mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt, (bool)READ);
         }
     }
 }

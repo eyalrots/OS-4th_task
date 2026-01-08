@@ -8,7 +8,7 @@
 /* MEMORY MACROS */
 #define HIT_RATE 0.1
 #define MEM_WR_T 50*m
-#define USED_SLOTS_TH 2
+#define USED_SLOTS_TH 4
 
 #define INTER_MEM_ACCS_T 50*m
 #define WR_RATE 0.33

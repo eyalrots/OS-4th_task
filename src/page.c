@@ -40,7 +40,7 @@ int page_second_chance(page_t *page, pthread_mutex_t *memory_mutex)
 
     page_read(page, new_data, memory_mutex);
     if (!new_data) {
-        return 1;
+        return 0;
     }
     if (new_data->reference) {
         new_data->valid = NULL;
