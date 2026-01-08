@@ -82,8 +82,9 @@ static void mmu_hd_handler(int msgid, action_t action)
 }
 
 void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
-                   pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
-                   int *num_in_mem, pthread_cond_t *mmu_cond)
+                   pthread_mutex_t *evctr_mutex, pthread_mutex_t *cond_mutex_2,
+                   page_t *memory, int msgid, int *num_in_mem,
+                   pthread_cond_t *mmu_cond, pthread_cond_t *mmu_cond_2)
 {
     message_t msg;
     message_t ack;
@@ -125,18 +126,31 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                     perror("Error: Failed to lock cond mutex @main.\n");
                 }
                 if (pthread_cond_signal(mmu_cond)) {
-                    perror("Error: Failed to signalconditional variable main->evicter.\n");
+                    perror(
+                        "Error: Failed to signalconditional variable main->evicter.\n");
                 }
                 if (pthread_mutex_unlock(evctr_mutex)) {
                     perror("Error: Failed to unlock cond mutex @main.\n");
                 }
 
                 // WAIT FOR SIGNAL.
-                do {
-                    sched_yield();
-                    mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt,
-                                          (bool)READ);
-                } while (new_cnt >= N);
+                
+                // do {
+                //     sched_yield();
+                //     mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt,
+                //                           (bool)READ);
+                // } while (new_cnt >= N);
+                                
+                if (pthread_mutex_lock(cond_mutex_2)) {
+                    perror("Error: Failed to lock cond mutex @main.\n");
+                }
+                if (pthread_cond_wait(mmu_cond_2, cond_mutex_2)) {
+                    perror(
+                        "Error: Failed to signalconditional variable main->evicter.\n");
+                }
+                if (pthread_mutex_unlock(cond_mutex_2)) {
+                    perror("Error: Failed to unlock cond mutex @main.\n");
+                }
             }
             // REQUEST HD.
             mmu_hd_handler(msgid, READ);
@@ -170,7 +184,7 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                                  (bool)WRITE);
         } else {
             random = page_id;
-		}
+        }
         if (!msg.action) {
             // SEND ACK TO PROCESS
             goto proc_ack;
@@ -196,8 +210,10 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
 }
 
 void mmu_evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
-                      pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
-                      int *num_in_mem, pthread_cond_t *mmu_cond)
+                      pthread_mutex_t *evctr_mutex,
+                      pthread_mutex_t *cond_mutex_2, page_t *memory, int msgid,
+                      int *num_in_mem, pthread_cond_t *mmu_cond,
+                      pthread_cond_t *mmu_cond_2)
 {
     int circular_idx = 0;
     /* mutex opratiom variables */
@@ -205,12 +221,30 @@ void mmu_evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
     page_t new_page = {.valid = NULL, .dirty = NULL, .reference = NULL};
 
     while (1) {
-        pthread_mutex_lock(evctr_mutex);
-        pthread_cond_wait(mmu_cond, evctr_mutex);
-        pthread_mutex_unlock(evctr_mutex);
+        if (pthread_mutex_lock(evctr_mutex)) {
+            perror("Error: Failed to lock cond mutex @evicter.\n");
+        }
+        if (pthread_cond_wait(mmu_cond, evctr_mutex)) {
+            perror("Error: Failed to wait for cond @evicter.\n");
+        }
+        if (pthread_mutex_unlock(evctr_mutex)) {
+            perror("Error: Failed to unlock cond mutex @evicter.\n");
+        }
 
         mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt, (bool)READ);
-        while (new_cnt > USED_SLOTS_TH) {
+        while (new_cnt >= USED_SLOTS_TH) {
+            if (new_cnt == N - 1) {
+                if (pthread_mutex_lock(cond_mutex_2)) {
+                    perror("Error: Failed to lock cond mutex @evicter.\n");
+                }
+                if (pthread_cond_signal(mmu_cond_2)) {
+                    perror("Error: Failed to wait for cond @evicter.\n");
+                }
+                if (pthread_mutex_unlock(cond_mutex_2)) {
+                    perror("Error: Failed to unlock cond mutex @evicter.\n");
+                }
+            }
+
             if (page_second_chance(&memory[circular_idx], mem_mutex)) {
                 circular_idx = (circular_idx + 1) % N;
                 continue;
@@ -252,7 +286,7 @@ void mmu_printer_loop(pthread_mutex_t *mem_mutex, page_t *memory)
 
         if (pthread_mutex_lock(mem_mutex)) {
             perror("Error: Failed to lock memory mutex @printer.\n");
-		}
+        }
         for (i = 0; i < N; i++) {
             local_copy_of_memory[i] = memory[i];
         }
@@ -264,13 +298,14 @@ void mmu_printer_loop(pthread_mutex_t *mem_mutex, page_t *memory)
             printf("%d|", i);
             if (local_copy_of_memory[i].valid) {
                 if (local_copy_of_memory[i].dirty) {
-                    printf("1\n");
+                    printf("1");
                 } else {
-                    printf("0\n");
+                    printf("0");
                 }
             } else {
-                printf("-\n");
+                printf("-");
             }
+            printf("|%d\n", local_copy_of_memory[i].reference);
         }
         printf("\n\n");
     }

@@ -15,12 +15,7 @@
 #include "../include/config.h"
 #include "../include/page.h"
 
-typedef enum type {
-    MMU_REQUEST = 1,
-    MMU_ACK,
-    HD_REQUEST,
-    HD_ACK
-} type_t;
+typedef enum type { MMU_REQUEST = 1, MMU_ACK, HD_REQUEST, HD_ACK } type_t;
 
 typedef struct __attribute__((packed)) msg_buffer {
     long msg_type;
@@ -29,12 +24,15 @@ typedef struct __attribute__((packed)) msg_buffer {
 } message_t;
 
 void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
-               pthread_mutex_t *evctr_mutex, page_t *memory, int msgid,
-               int *num_in_mem, pthread_cond_t *mmu_cond);
+                   pthread_mutex_t *evctr_mutex, pthread_mutex_t *cond_mutex_2,
+                   page_t *memory, int msgid, int *num_in_mem,
+                   pthread_cond_t *mmu_cond, pthread_cond_t *mmu_cond_2);
 
 void mmu_evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
-                  pthread_mutex_t *evctr_mutex, page_t *memory, int msgig,
-                  int *num_in_mem, pthread_cond_t *mmu_cond);
+                      pthread_mutex_t *evctr_mutex,
+                      pthread_mutex_t *cond_mutex_2, page_t *memory, int msgid,
+                      int *num_in_mem, pthread_cond_t *mmu_cond,
+                      pthread_cond_t *mmu_cond_2);
 
 void mmu_printer_loop(pthread_mutex_t *mem_mutex, page_t *memory);
 

@@ -5,7 +5,9 @@
 pthread_mutex_t mem_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t cnt_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t cond_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t cond_mutex_2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t mmu_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t mmu_cond_2 = PTHREAD_COND_INITIALIZER;
 page_t memory[N];
 int num_in_mem = 0;
 
@@ -47,21 +49,24 @@ void *sim_mmu_main_thread(void *arg)
 {
     int msgid = 0;
     msgid = *((int *)arg);
-    mmu_main_loop(&mem_mutex, &cnt_mutex, &cond_mutex, memory, msgid,
-                  &num_in_mem, &mmu_cond);
+    mmu_main_loop(&mem_mutex, &cnt_mutex, &cond_mutex, &cond_mutex_2, memory,
+                  msgid, &num_in_mem, &mmu_cond, &mmu_cond_2);
+    return NULL;
 }
 
 void *sim_mmu_evicter_thread(void *arg)
 {
     int msgid = 0;
     msgid = *((int *)arg);
-    mmu_evicter_loop(&mem_mutex, &cnt_mutex, &cond_mutex, memory, msgid,
-                     &num_in_mem, &mmu_cond);
+    mmu_evicter_loop(&mem_mutex, &cnt_mutex, &cond_mutex, &cond_mutex_2, memory,
+                     msgid, &num_in_mem, &mmu_cond, &mmu_cond_2);
+    return NULL;
 }
 
 void *sim_mmu_printer_thread(void *arg)
 {
     mmu_printer_loop(&mem_mutex, memory);
+    return NULL;
 }
 
 pid_t sim_my_fork(void)
@@ -85,7 +90,6 @@ int main()
     int msgid = 0;
     key_t key = 0;
     int i = 0;
-    int error = 0;
 
     /* Initialization */
     memset(&pids, 0, sizeof(pids));
