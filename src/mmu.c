@@ -120,6 +120,7 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                 pthread_mutex_lock(evctr_mutex);
                 pthread_cond_signal(mmu_cond);
                 pthread_mutex_unlock(evctr_mutex);
+
                 // WAIT FOR SIGNAL.
                 do {
                     sched_yield();
@@ -133,7 +134,7 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             /* make page valid */
             new_page.valid = true;
             new_page.dirty = false;
-            new_page.reference = NULL;
+            new_page.reference = memory[page_id].reference;
             mmu_memory_operation(mem_mutex, &memory[page_id], &new_page,
                                  (bool)WRITE);
 
@@ -147,11 +148,13 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             mmu_memory_operation(mem_mutex, &memory[(int)random], &new_page,
                                  (bool)READ);
         } while (!new_page.valid);
-        new_page.valid = NULL;
-        new_page.dirty = NULL;
-        new_page.reference = true;
-        mmu_memory_operation(mem_mutex, &memory[(int)random], &new_page,
-                             (bool)WRITE);
+        if (is_hit) {
+            new_page.valid = memory[(int)random].valid;
+            new_page.dirty = memory[(int)random].dirty;
+            new_page.reference = true;
+            mmu_memory_operation(mem_mutex, &memory[(int)random], &new_page,
+                                 (bool)WRITE);
+        }
         if (!msg.action) {
             // SEND ACK TO PROCESS
             goto proc_ack;
@@ -159,9 +162,9 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
         }
         /* WRITE */
         nanosleep(&duration, &remaining);
-        new_page.valid = NULL;
+        new_page.valid = memory[(int)random].valid;
         new_page.dirty = true;
-        new_page.reference = NULL;
+        new_page.reference = memory[(int)random].reference;
         mmu_memory_operation(mem_mutex, &memory[(int)random], &new_page,
                              (bool)WRITE);
         // SEND ACK TO PROCESS
@@ -204,7 +207,7 @@ void mmu_evicter_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
             mmu_hd_handler(msgid, WRITE);
             new_page.valid = false;
             new_page.dirty = false;
-            new_page.reference = NULL;
+            new_page.reference = memory[circular_idx].reference;
             mmu_memory_operation(mem_mutex, &memory[circular_idx], &new_page,
                                  (bool)WRITE);
         update_counter:
