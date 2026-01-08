@@ -134,13 +134,13 @@ void mmu_main_loop(pthread_mutex_t *mem_mutex, pthread_mutex_t *cnt_mutex,
                 }
 
                 // WAIT FOR SIGNAL.
-                
+
                 // do {
                 //     sched_yield();
                 //     mmu_counter_operation(cnt_mutex, num_in_mem, &new_cnt,
                 //                           (bool)READ);
                 // } while (new_cnt >= N);
-                                
+
                 if (pthread_mutex_lock(cond_mutex_2)) {
                     perror("Error: Failed to lock cond mutex @main.\n");
                 }
@@ -305,7 +305,7 @@ void mmu_printer_loop(pthread_mutex_t *mem_mutex, page_t *memory)
             } else {
                 printf("-");
             }
-            printf("|%d\n", local_copy_of_memory[i].reference);
+            printf("\n");
         }
         printf("\n\n");
     }
