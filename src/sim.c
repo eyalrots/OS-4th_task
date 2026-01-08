@@ -84,9 +84,9 @@ pid_t sim_my_fork(void)
 int main()
 {
     pid_t pids[4];
-    pthread_t mmu_main = NULL;
-    pthread_t mmu_evicter = NULL;
-    pthread_t mmu_printer = NULL;
+    pthread_t mmu_main;
+    pthread_t mmu_evicter;
+    pthread_t mmu_printer;
     int msgid = 0;
     key_t key = 0;
     int i = 0;
